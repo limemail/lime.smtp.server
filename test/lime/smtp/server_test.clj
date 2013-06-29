@@ -122,35 +122,35 @@
 
 (deftest test-connect-mode
   (let [writer (StringWriter.)
-        session (connect-mode {:server-host "foo"} nil nil writer)]
+        session (connect-mode {:server-host "foo"} nil nil nil writer)]
     (is (= session {:server-host "foo" :mode :command}))
     (is (= (str writer) "220 foo Service ready\r\n"))))
 
 (deftest test-command-mode
   (let [writer (StringWriter.)
         reader (io/reader (StringReader. "NOOP"))
-        session (command-mode {} nil reader writer)]
+        session (command-mode {} core-smtp nil reader writer)]
     (is (= session {:reply {:code 250 :text "OK"}}))
     (is (= (str writer) "250 OK\r\n")))
   (let [writer (StringWriter.)
         reader (io/reader (StringReader. "NOOP "))
-        session (command-mode {} nil reader writer)]
+        session (command-mode {} core-smtp nil reader writer)]
     (is (= session {:reply {:code 250 :text "OK"}}))
     (is (= (str writer) "250 OK\r\n")))
   (let [writer (StringWriter.)
         reader (io/reader (StringReader. "NOOP foo"))
-        session (command-mode {} nil reader writer)]
+        session (command-mode {} core-smtp nil reader writer)]
     (is (= session {:reply {:code 250 :text "OK"}}))
     (is (= (str writer) "250 OK\r\n")))
   (let [writer (StringWriter.)
         reader (io/reader (StringReader. "BLAH"))
-        session (command-mode {} nil reader writer)]
+        session (command-mode {} core-smtp nil reader writer)]
     (is (= session {:reply {:code 500 :text "Unrecognized command"}}))
     (is (= (str writer) "500 Unrecognized command\r\n"))))
 
 (deftest test-data-mode
   (let [reader (io/reader (StringReader. "foo\r\nbar\r\n.\r\n"))]
-    (is (= (data-mode {:mode :data} nil reader nil)
+    (is (= (data-mode {:mode :data} nil nil reader nil)
            {:mode :command :message "foo\r\nbar\r\n"}))))
 
 (deftest test-quit-mode
@@ -159,13 +159,13 @@
                 client (Socket. "localhost" port)
                 socket (.accept server)]
       (let [writer (StringWriter.)
-            session (quit-mode {} socket nil writer)]
+            session (quit-mode {} nil socket nil writer)]
         (is (= session {}))
         (is (= (str writer) "221 Closing connection\r\n"))
         (is (.isClosed socket))))))
 
 (deftest test-unrecognized-mode
   (let [writer (StringWriter.)
-        session (unrecognized-mode {:mode :foo} nil nil writer)]
+        session (unrecognized-mode {:mode :foo} nil nil nil writer)]
     (is (= session {:mode :command}))
     (is (= (str writer) "451 Server error\r\n"))))

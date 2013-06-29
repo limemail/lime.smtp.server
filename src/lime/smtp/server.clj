@@ -96,71 +96,66 @@
         (recur (conj data line))))))
 
 (defn connect-mode
-  [session socket reader writer]
+  [session config socket reader writer]
   (write-reply writer {:code 220 :text (str (:server-host session) " Service ready")})
   (assoc session :mode :command))
 
 (defn command-mode
-  [session socket reader writer]
+  [session config socket reader writer]
   (let [[command parameters] (string/split (read-command reader) #" " 2)
-        handle-command (condp = (string/upper-case command)
-                         "EHLO" handle-ehlo
-                         "HELO" handle-helo
-                         "MAIL" handle-mail
-                         "RCPT" handle-rcpt
-                         "DATA" handle-data
-                         "RSET" handle-rset
-                         "NOOP" handle-noop
-                         "QUIT" handle-quit
-                         handle-unrecognized-command)
+        handle-command (get-in config
+                               [:commands (keyword (string/lower-case command)) :handler]
+                               handle-unrecognized-command)
         session (handle-command session parameters)]
     (write-reply writer (:reply session))
     session))
 
 (defn data-mode
-  [session socket reader writer]
+  [session config socket reader writer]
   (assoc session
     :message (read-data reader)
     :mode :command))
 
 (defn quit-mode
-  [session socket reader writer]
+  [session config socket reader writer]
   (write-reply writer {:code 221 :text "Closing connection"})
   (.close socket)
   session)
 
 (defn unrecognized-mode
-  [session socket reader writer]
+  [session config socket reader writer]
   (write-reply writer {:code 451 :text "Server error"})
   (assoc session :mode :command))
 
 (defn handle-session
-  [session socket]
+  [session config socket]
   (let [reader (io/reader (.getInputStream socket))
         writer (io/writer (.getOutputStream socket))]
     (loop [session (assoc session :mode :connect)]
       (if (.isClosed socket)
         session
-        (let [handle-mode (condp = (:mode session)
-                            :connect connect-mode
-                            :command command-mode
-                            :data data-mode
-                            :quit quit-mode
-                            unrecognized-mode)]
+        (let [handle-mode (get-in config [:modes (:mode session)] unrecognized-mode)]
           (recur (handle-mode session socket reader writer)))))))
 
 (def core-smtp
   {;; These are the commands the server recognizes. Extensions must
    ;; add new commands to this map. (The value might need to be a map
    ;; in order to allow for extra configuration.)
-   :commands {:ehlo handle-ehlo
-              :helo handle-helo
-              :mail handle-mail
-              :rcpt handle-rcpt
-              :data handle-data
-              :rset handle-rset
-              :noop handle-noop
-              :quit handle-quit}
+   :commands {:ehlo {;; The textual form of the command in upper case.
+                     :command "EHLO"
+                     ;; The function for handling the command.
+                     :handler handle-ehlo
+                     ;; Optional help text to be returned when the
+                     ;; HELP command is handled with the command as
+                     ;; its argument.
+                     :help ""}
+              :helo {:command "HELO" :handler handle-helo}
+              :mail {:command "MAIL" :handler  handle-mail}
+              :rcpt {:command "RCPT" :handler handle-rcpt}
+              :data {:command "DATA" :handler handle-data}
+              :rset {:command "RSET" :handler handle-rset}
+              :noop {:command "NOOP" :handler handle-noop}
+              :quit {:command "QUIT" :handler handle-quit}}
    ;; These are the modes the server can operate in. The purpose of a
    ;; mode is to change how the server interacts with a socket. For
    ;; example, command-mode delegates to a command handling function,
@@ -178,6 +173,7 @@
                        :name "Verify"
                        :description "Verifies if a user exists."
                        ;; They keyword to be shown in the EHLO reply.
+                       ;; This must be in upper case.
                        :keyword "VRFY"
                        ;; Defaults to true. This determines if the
                        ;; extension should be shown in the EHLO reply.
