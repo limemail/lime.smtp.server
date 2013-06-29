@@ -148,3 +148,45 @@
                             :quit quit-mode
                             unrecognized-mode)]
           (recur (handle-mode session socket reader writer)))))))
+
+(def core-smtp
+  {;; These are the commands the server recognizes. Extensions must
+   ;; add new commands to this map. (The value might need to be a map
+   ;; in order to allow for extra configuration.)
+   :commands {:ehlo handle-ehlo
+              :helo handle-helo
+              :mail handle-mail
+              :rcpt handle-rcpt
+              :data handle-data
+              :rset handle-rset
+              :noop handle-noop
+              :quit handle-quit}
+   ;; These are the modes the server can operate in. The purpose of a
+   ;; mode is to change how the server interacts with a socket. For
+   ;; example, command-mode delegates to a command handling function,
+   ;; whereas data-mode reads the mail data.
+   :modes {:connect connect-mode
+           :command command-mode
+           :data data-mode
+           :quit quit-mode}
+   ;; Every extension applied to the server will be registered here.
+   ;; This purpose of this is ito allow EHLO to do its job, and to
+   ;; provide any additional configuration an extenstion requires.
+   :extensions {:vrfy {;; The name and description of the extension.
+                       ;; These values are optional, but should be
+                       ;; provided for documentation purposes.
+                       :name "Verify"
+                       :description "Verifies if a user exists."
+                       ;; They keyword to be shown in the EHLO reply.
+                       :keyword "VRFY"
+                       ;; Defaults to true. This determines if the
+                       ;; extension should be shown in the EHLO reply.
+                       :advertise? false
+                       }
+                :size {:keyword "SIZE"
+                       ;; Additional parameters to be sent in addition
+                       ;; to the keyword in the EHLO reply. If a
+                       ;; sequence is provided, the values will be
+                       ;; joined with a space.
+                       :parameters "35882577"
+                       }}})
