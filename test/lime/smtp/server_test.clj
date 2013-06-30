@@ -6,41 +6,41 @@
           (java.io StringReader StringWriter)
           (java.net ServerSocket Socket)))
 
-(deftest test-handle-ehlo
+(defn test-common-hello
+  [handle]
   (testing "Server host is not preserved"
-    (is (= (:server-host (handle-ehlo {:server-host "server.example.com"} ""))
+    (is (= (:server-host (handle {:server-host "server.example.com"} ""))
            "server.example.com")))
   (testing "Client host must be nil when not provided"
-    (is (nil? (:client-host (handle-ehlo {} "") :not-nil))))
+    (is (nil? (:client-host (handle {} "") :not-nil))))
   (testing "Reply should be 250 with the server host as the text"
-    (is (= (:reply (handle-ehlo {:server-host "server.example.com"} ""))
+    (is (= (:reply (handle {:server-host "server.example.com"} ""))
            {:code 250 :text "server.example.com Service ready"})))
   (testing "Client host is not set properly"
-    (is (= (:client-host (handle-ehlo {} "client.example.com"))
+    (is (= (:client-host (handle {} "client.example.com"))
            "client.example.com")))
   (testing "Session not reset properly"
-    (is (not (contains? (handle-ehlo {:foo :bar} "") :foo))))
+    (let [session (handle {:server-host "server.example.com"
+                           :mode :command
+                           :foo :bar} "")]
+      (is (not (contains? session :foo)))
+      (is (contains? session :client-host))
+      (is (contains? session :server-host))
+      (is (contains? session :reply))
+      (is (contains? session :mode))
+      (is (= (count session) 4))))
+  (testing "Command mode not preserved"
+    (is (= (:mode (handle {:mode :command} "")) :command))))
+
+(deftest test-handle-ehlo
+  (test-common-hello handle-ehlo)
   (testing "Extensions are not advertised properly"
     (let [session {:extensions ["FOO" "BAR"] :server-host "server.example.com"}]
       (is (= (get-in (handle-ehlo session "") [:reply :lines])
-             ["server.example.com Service ready" "FOO" "BAR"]))))
-  ;; TODO Test for domain or address literal syntax error (501)
-  )
+             ["server.example.com Service ready" "FOO" "BAR"])))))
 
 (deftest test-handle-helo
-  (is (= (handle-helo {:server-host "server.example.com" :mode :command} "")
-         {:server-host "server.example.com"
-          :reply {:code 250 :text "server.example.com" }
-          :client-host nil
-          :mode :command}))
-  (is (= (handle-helo {:server-host "server.example.com" :mode :command} "client.example.com")
-         {:server-host "server.example.com"
-          :client-host "client.example.com"
-          :reply {:code 250 :text "server.example.com"}
-          :mode :command}))
-  (is (not (contains? (handle-ehlo {:foo :bar} "") :foo)))
-  ;; TODO Test for domain syntax error (501)
-  )
+  (test-common-hello handle-helo))
 
 (deftest test-handle-mail
   (is (= (handle-mail {:mode :command} "FROM:foo@example.com")

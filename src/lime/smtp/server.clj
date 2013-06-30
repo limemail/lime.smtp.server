@@ -21,7 +21,8 @@
   (-> session
       (reset-session)
       (assoc :client-host (if (.isEmpty parameters) nil parameters)
-             :reply {:code 250 :text (:server-host session)})))
+             :reply {:code 250 :text (str (:server-host session)
+                                          " Service ready")})))
 
 (defn handle-mail
   [session parameters]
