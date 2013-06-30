@@ -8,10 +8,13 @@
 
 (defn handle-ehlo
   [session parameters]
-  (-> session
-      (reset-session)
-      (assoc :client-host (if (.isEmpty parameters) nil parameters)
-             :reply {:code 250 :text (:server-host session)})))
+  (let [text (str (:server-host session) " Service ready")]
+    (-> session
+        (reset-session)
+        (assoc :client-host (if (.isEmpty parameters) nil parameters)
+               :reply (if-let [exts (:extensions session)]
+                        {:code 250 :lines (concat [text] exts)}
+                        {:code 250 :text text})))))
 
 (defn handle-helo
   [session parameters]
@@ -127,11 +130,19 @@
   (write-reply writer {:code 451 :text "Server error"})
   (assoc session :mode :command))
 
+(defn ext-keywords
+  [config]
+  (letfn [(f [exts ext]
+            (conj exts (:keyword (val ext))))]
+    (reduce f [] (:extensions config))))
+
 (defn handle-session
   [session config socket]
   (let [reader (io/reader (.getInputStream socket))
         writer (io/writer (.getOutputStream socket))]
-    (loop [session (assoc session :mode :connect)]
+    (loop [session (assoc session
+                     :mode :connect
+                     :extensions (ext-keywords config))]
       (if (.isClosed socket)
         session
         (let [handle-mode (get-in config [:modes (:mode session)] unrecognized-mode)]
@@ -150,7 +161,7 @@
                      ;; its argument.
                      :help ""}
               :helo {:command "HELO" :handler handle-helo}
-              :mail {:command "MAIL" :handler  handle-mail}
+              :mail {:command "MAIL" :handler handle-mail}
               :rcpt {:command "RCPT" :handler handle-rcpt}
               :data {:command "DATA" :handler handle-data}
               :rset {:command "RSET" :handler handle-rset}

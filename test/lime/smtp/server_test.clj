@@ -7,18 +7,23 @@
           (java.net ServerSocket Socket)))
 
 (deftest test-handle-ehlo
-  (is (= (handle-ehlo {:server-host "server.example.com" :mode :command} "")
-         {:server-host "server.example.com"
-          :reply {:code 250 :text "server.example.com"}
-          :client-host nil
-          :mode :command}))
-  (is (= (handle-ehlo {:server-host "server.example.com" :mode :command} "client.example.com")
-         {:server-host "server.example.com"
-          :client-host "client.example.com"
-          :reply {:code 250 :text "server.example.com"}
-          :mode :command}))
-  (is (not (contains? (handle-ehlo {:foo :bar} "") :foo)))
-  ;; TODO Test for advertized extensions
+  (testing "Server host is not preserved"
+    (is (= (:server-host (handle-ehlo {:server-host "server.example.com"} ""))
+           "server.example.com")))
+  (testing "Client host must be nil when not provided"
+    (is (nil? (:client-host (handle-ehlo {} "") :not-nil))))
+  (testing "Reply should be 250 with the server host as the text"
+    (is (= (:reply (handle-ehlo {:server-host "server.example.com"} ""))
+           {:code 250 :text "server.example.com Service ready"})))
+  (testing "Client host is not set properly"
+    (is (= (:client-host (handle-ehlo {} "client.example.com"))
+           "client.example.com")))
+  (testing "Session not reset properly"
+    (is (not (contains? (handle-ehlo {:foo :bar} "") :foo))))
+  (testing "Extensions are not advertised properly"
+    (let [session {:extensions ["FOO" "BAR"] :server-host "server.example.com"}]
+      (is (= (get-in (handle-ehlo session "") [:reply :lines])
+             ["server.example.com Service ready" "FOO" "BAR"]))))
   ;; TODO Test for domain or address literal syntax error (501)
   )
 
@@ -169,3 +174,7 @@
         session (unrecognized-mode {:mode :foo} nil nil nil writer)]
     (is (= session {:mode :command}))
     (is (= (str writer) "451 Server error\r\n"))))
+
+(deftest test-ext-keywords
+  (let [config {:extensions {:foo {:keyword "FOO"} :bar {:keyword "BAR"}}}]
+    (is (= (ext-keywords config) ["FOO" "BAR"]))))
