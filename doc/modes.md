@@ -100,5 +100,5 @@ will be switched back to command mode.
 ### Quit
 
 When the QUIT command is handled, it will set the mode to quit mode.
-This is so that the final reply can be written to the client and the
-network connection can be closed.
+This is so the network connection can be closed. This mode could be
+expanded to do any other final cleanup when ending the session.

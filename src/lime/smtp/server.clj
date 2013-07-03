@@ -124,7 +124,6 @@
 
 (defn quit-mode
   [session config socket reader writer]
-  (write-reply writer {:code 221 :text "Closing connection"})
   (.close socket)
   session)
 

@@ -164,10 +164,8 @@
     (with-open [server (ServerSocket. port)
                 client (Socket. "localhost" port)
                 socket (.accept server)]
-      (let [writer (StringWriter.)
-            session (quit-mode {} nil socket nil writer)]
+      (let [session (quit-mode {} nil socket nil nil)]
         (is (= session {}))
-        (is (= (str writer) "221 Closing connection\r\n"))
         (is (.isClosed socket))))))
 
 (deftest test-unrecognized-mode
