@@ -157,7 +157,7 @@
 (deftest test-data-mode
   (let [reader (io/reader (StringReader. "foo\r\nbar\r\n.\r\n"))]
     (is (= (data-mode {:mode :data} nil nil reader nil)
-           {:mode :command :message "foo\r\nbar\r\n"}))))
+           {:mode :command :transaction {:message "foo\r\nbar\r\n"}}))))
 
 (deftest test-quit-mode
   (let [port (+ (rand-int (- 65535 1000)) 1000)]

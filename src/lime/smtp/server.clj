@@ -118,9 +118,9 @@
 
 (defn data-mode
   [session config socket reader writer]
-  (assoc session
-    :message (read-data reader)
-    :mode :command))
+  (-> session
+      (assoc-in [:transaction :message] (read-data reader))
+      (assoc :mode :command)))
 
 (defn quit-mode
   [session config socket reader writer]
