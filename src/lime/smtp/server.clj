@@ -4,7 +4,7 @@
 
 (defn reset-session
   [session]
-  (select-keys session [:server-host :mode]))
+  (dissoc session :transaction))
 
 (defn handle-ehlo
   [session parameters]
@@ -26,12 +26,14 @@
 
 (defn handle-mail
   [session parameters]
-  (assoc session :sender (subs parameters 5) :reply {:code 250}))
+  (-> session
+      (assoc-in [:transaction :sender] (subs parameters 5))
+      (assoc :reply {:code 250})))
 
 (defn handle-rcpt
   [session parameters]
   (-> session
-      (update-in [:recipients] conj (subs parameters 3))
+      (update-in [:transaction :recipients] conj (subs parameters 3))
       (assoc :reply {:code 250})))
 
 (defn handle-data

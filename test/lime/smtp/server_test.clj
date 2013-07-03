@@ -20,15 +20,8 @@
     (is (= (:client-host (handle {} "client.example.com"))
            "client.example.com")))
   (testing "Session not reset properly"
-    (let [session (handle {:server-host "server.example.com"
-                           :mode :command
-                           :foo :bar} "")]
-      (is (not (contains? session :foo)))
-      (is (contains? session :client-host))
-      (is (contains? session :server-host))
-      (is (contains? session :reply))
-      (is (contains? session :mode))
-      (is (= (count session) 4))))
+    (let [session (handle {:transaction {}} "")]
+      (is (not (contains? session :transaction)))))
   (testing "Command mode not preserved"
     (is (= (:mode (handle {:mode :command} "")) :command))))
 
@@ -43,23 +36,31 @@
   (test-common-hello handle-helo))
 
 (deftest test-handle-mail
-  (is (= (handle-mail {:mode :command} "FROM:foo@example.com")
-         {:sender "foo@example.com"
-          :reply {:code 250}
-          :mode :command}))
+  (testing "Command mode not preserved"
+    (let [session (handle-mail {:mode :command} "FROM:foo@example.com")]
+      (is (= (:mode session) :command))))
+  (testing "Sender was not set properly"
+    (let [session (handle-mail {} "FROM:foo@example.com")]
+      (is (= (get-in session [:transaction :sender]) "foo@example.com"))))
+  (testing "Reply should be 250"
+    (let [session (handle-mail {} "FROM:foo@example.com")]
+      (is (= (:reply session) {:code 250}))))
+  
   ;; TODO Test that invalid parameters return 455
   ;; TODO Test if mail session is already in progress (503)
   ;; TODO Test that mailbox syntax is correct (otherwise 553)
   ;; TODO Test that unrecognized or not implemented params return 555
+  ;; TODO 501
   )
 
 (deftest test-handle-rcpt
   (is (= (handle-rcpt {:mode :command} "TO:foo@example.com")
-         {:recipients ["foo@example.com"]
+         {:transaction {:recipients ["foo@example.com"]}
           :reply {:code 250}
           :mode :command}))
-  (is (= (handle-rcpt {:recipients ["bar@example.com"] :mode :command} "TO:foo@example.com")
-         {:recipients ["bar@example.com" "foo@example.com"]
+  (is (= (handle-rcpt {:transaction {:recipients ["bar@example.com"]}
+                       :mode :command} "TO:foo@example.com")
+         {:transaction {:recipients ["bar@example.com" "foo@example.com"]}
           :reply {:code 250}
           :mode :command}))
   ;; TODO Test that invalid parameters return 455
