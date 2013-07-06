@@ -14,11 +14,11 @@
             (recur (= c \return) (.append line c))))))))
 
 (defn put-line
-  [writer line]
-  (doto writer
-    (.write line)
-    (.write "\r\n")
-    (.flush)))
+  [writer line & {:keys [flush?] :or {flush? true}}]
+  (.write writer line)
+  (.write writer "\r\n")
+  (when flush?
+    (.flush writer)))
 
 (defn reset-session
   [session]
