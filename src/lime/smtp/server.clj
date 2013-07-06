@@ -2,6 +2,24 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as string]))
 
+(defn get-line
+  [reader]
+  (loop [last-cr? false line (StringBuilder.)]
+    (let [i (.read reader)]
+      (if (neg? i)
+        (str line)
+        (let [c (char i)]
+          (if (and last-cr? (= c \newline))
+            (.substring line 0 (dec (.length line)))
+            (recur (= c \return) (.append line c))))))))
+
+(defn put-line
+  [writer line]
+  (doto writer
+    (.write line)
+    (.write "\r\n")
+    (.flush)))
+
 (defn reset-session
   [session]
   (dissoc session :transaction))
@@ -83,20 +101,17 @@
 
 (defn write-reply
   [writer reply]
-  (doto writer
-    (.write (build-reply reply))
-    (.write "\r\n")
-    (.flush))
+  (put-line writer (build-reply reply))
   nil) ;; Can this return anything useful?
 
 (defn read-command
   [reader]
-  (.readLine reader))
+  (get-line reader))
 
 (defn read-data
   [reader]
   (loop [data []]
-    (let [line (.readLine reader)]
+    (let [line (get-line reader)]
       (if (= line ".")
         (str (string/join "\r\n" data) "\r\n")
         (recur (conj data line))))))
