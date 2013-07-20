@@ -26,27 +26,35 @@
 
 (defn handle-ehlo
   [session parameters]
-  (let [text (str (:server-host session) " Service ready")]
+  (let [text (if-let [server-host (:server-host session)]
+               (str (:server-host session) " Service ready")
+               "Service ready")]
     (-> session
         (reset-session)
-        (assoc :client-host (if (.isEmpty parameters) nil parameters)
-               :reply (if-let [exts (:extensions session)]
-                        {:code 250 :lines (concat [text] exts)}
-                        {:code 250 :text text})))))
+        (assoc :client-host (if (and parameters (.isEmpty parameters)) nil parameters)
+               :reply {:code 250 :text (if-let [exts (:extensions session)]
+                                         (cons text exts)
+                                         text)}))))
 
 (defn handle-helo
   [session parameters]
   (-> session
       (reset-session)
-      (assoc :client-host (if (.isEmpty parameters) nil parameters)
-             :reply {:code 250 :text (str (:server-host session)
-                                          " Service ready")})))
+      (assoc :client-host (if (and parameters (.isEmpty parameters)) nil parameters)
+             :reply {:code 250
+                     :text (if-let [server-host (:server-host session)]
+                             (str (:server-host session) " Service ready")
+                             "Service ready")})))
 
 (defn handle-mail
   [session parameters]
-  (-> session
-      (assoc-in [:transaction :sender] (subs parameters 5))
-      (assoc :reply {:code 250})))
+  ;; TODO error if transaction already in progress
+  ;; TODO error if sender is nil or empty 553
+  (if (or (nil? parameters) (.isEmpty parameters))
+    (assoc session :reply {:code 553})
+    (-> session
+        (assoc-in [:transaction :sender] (subs parameters 5))
+        (assoc :reply {:code 250}))))
 
 (defn handle-rcpt
   [session parameters]
@@ -90,13 +98,13 @@
     (string/join "\r\n" lines)))
 
 (defn build-reply
-  [{:keys [code text lines] :as reply}]
+  [{:keys [code text] :as reply}]
   (when-not (integer? code)
     (throw (ex-info "Reply code must be a three digit integer" reply)))
   (when (or (< code 200) (>= code 600))
     (throw (ex-info "Reply code must be within 200-599 range" reply)))
-  (cond (and text (not (.isEmpty text)))(str code " " text)
-        (seq lines) (join-reply-lines lines)
+  (cond (and (string? text) (not (.isEmpty text))) (str code " " text)
+        (and (sequential? text) (seq text)) (join-reply-lines text)
         :else (str code)))
 
 (defn write-reply

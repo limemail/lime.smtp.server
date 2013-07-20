@@ -6,34 +6,108 @@
           (java.io StringReader StringWriter)
           (java.net ServerSocket Socket)))
 
-(defn test-common-hello
-  [handle]
-  (testing "Server host is not preserved"
-    (is (= (:server-host (handle {:server-host "server.example.com"} ""))
-           "server.example.com")))
-  (testing "Client host must be nil when not provided"
-    (is (nil? (:client-host (handle {} "") :not-nil))))
-  (testing "Reply should be 250 with the server host as the text"
-    (is (= (:reply (handle {:server-host "server.example.com"} ""))
-           {:code 250 :text "server.example.com Service ready"})))
-  (testing "Client host is not set properly"
-    (is (= (:client-host (handle {} "client.example.com"))
-           "client.example.com")))
-  (testing "Session not reset properly"
-    (let [session (handle {:transaction {}} "")]
-      (is (not (contains? session :transaction)))))
-  (testing "Command mode not preserved"
-    (is (= (:mode (handle {:mode :command} "")) :command))))
+(defn test-fn
+  [f data]
+  (doseq [{:keys [params expect throws]} data]
+    (is (= expect (apply f params)))))
 
-(deftest test-handle-ehlo
-  (test-common-hello handle-ehlo)
-  (testing "Extensions are not advertised properly"
-    (let [session {:extensions ["FOO" "BAR"] :server-host "server.example.com"}]
-      (is (= (get-in (handle-ehlo session "") [:reply :lines])
-             ["server.example.com Service ready" "FOO" "BAR"])))))
+(def helo-data
+  [{:params [nil nil]
+    :expect {:reply {:code 250 :text "Service ready"}
+             :client-host nil}}
+   {:params [{} nil]
+    :expect {:reply {:code 250 :text "Service ready"}
+             :client-host nil}}
+   {:params [nil ""]
+    :expect {:reply {:code 250 :text "Service ready"}
+             :client-host nil}}
+   {:params [{} ""]
+    :expect {:reply {:code 250 :text "Service ready"}
+             :client-host nil}}
+   {:params [nil "client.example.com"]
+    :expect {:reply {:code 250 :text "Service ready"}
+             :client-host "client.example.com"}}
+   {:params [{} "client.example.com"]
+    :expect {:reply {:code 250 :text "Service ready"}
+             :client-host "client.example.com"}}
+   {:params [{:server-host "server.example.com"} nil]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host nil}}
+   {:params [{:server-host "server.example.com"} ""]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host nil}}
+   {:params [{:server-host "server.example.com"} "client.example.com"]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host "client.example.com"}}
+   {:params [{:server-host "server.example.com"
+              :transaction nil} nil]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host nil}}
+   {:params [{:server-host "server.example.com"
+              :transaction nil} ""]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host nil}}
+   {:params [{:server-host "server.example.com"
+              :transaction nil} "client.example.com"]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host "client.example.com"}}
+   {:params [{:server-host "server.example.com"
+              :transaction {}} nil]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host nil}}
+   {:params [{:server-host "server.example.com"
+              :transaction {}} ""]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host nil}}
+   {:params [{:server-host "server.example.com"
+              :transaction {}} "client.example.com"]
+    :expect {:server-host "server.example.com"
+             :reply {:code 250 :text "server.example.com Service ready"}
+             :client-host "client.example.com"}}])
+(require 'clojure.pprint)
+(def ehlo-data
+  (letfn [(f [entry]
+            (clojure.pprint/pprint entry)
+            (-> entry
+                (assoc-in [:params 0 :extensions] ["FOO" "BAR"])
+                (update-in [:expect :reply :text] #(if %1
+                                                     (cons %1 %2)
+                                                     %2) ["FOO" "BAR"])))]
+    (map f helo-data)))
 
-(deftest test-handle-helo
-  (test-common-hello handle-helo))
+(deftest test-helo
+  (test-fn handle-helo helo-data))
+
+(deftest test-ehlo
+  (test-fn handle-ehlo (concat helo-data ehlo-data)))
+
+(def mail-data
+  [{:params [nil nil]
+    :expect {:reply {:code 553}}}])
+
+(deftest test-mail
+  (test-fn handle-mail mail-data))
+
+
+;E: 552, 451, 452, 550, 553, 503, 455, 555
+
+
+
+
+
+
+
+
+
+
 
 (deftest test-handle-mail
   (testing "Command mode not preserved"
@@ -104,13 +178,13 @@
                         (build-reply {:code 199})))
   (is (thrown-with-msg? ExceptionInfo #"within 200-599 range"
                         (build-reply {:code 600})))
-  (is (= (build-reply {:code 250 :lines ["one" "two" "three"]})
+  (is (= (build-reply {:code 250 :text ["one" "two" "three"]})
          "250-one\r\n250-two\r\n250 three"))
-  (is (= (build-reply {:code 250 :lines ["one" "two"]})
+  (is (= (build-reply {:code 250 :text ["one" "two"]})
          "250-one\r\n250 two"))
-  (is (= (build-reply {:code 250 :lines ["one"]})
+  (is (= (build-reply {:code 250 :text ["one"]})
          "250 one"))
-  (is (= (build-reply {:code 250 :lines []})
+  (is (= (build-reply {:code 250 :text []})
          "250")))
 
 (deftest test-write-reply
