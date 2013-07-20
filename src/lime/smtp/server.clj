@@ -1,6 +1,7 @@
 (ns lime.smtp.server
   (:require [clojure.java.io :as io]
-            [clojure.string :as string]))
+            [clojure.string :as string])
+  (:import [java.nio ByteBuffer]))
 
 (defn get-line
   [reader]
@@ -9,6 +10,19 @@
       (if (neg? i)
         (str line)
         (let [c (char i)]
+          (if (and last-cr? (= c \newline))
+            (.substring line 0 (dec (.length line)))
+            (recur (= c \return) (.append line c))))))))
+
+(defn get-line-nio
+  [socket]
+  (let [b (ByteBuffer/allocate 1024)
+        i (.read socket b)
+        b (.asCharBuffer b)]
+    (loop [last-cr? false line (StringBuilder.)]
+      (let [c (.get b)]
+        (if (= (.position b) i)
+          (str line)
           (if (and last-cr? (= c \newline))
             (.substring line 0 (dec (.length line)))
             (recur (= c \return) (.append line c))))))))
